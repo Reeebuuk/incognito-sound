@@ -1,10 +1,9 @@
 package ie.incognitoescaperoom
 
-import org.slf4j.{ LoggerFactory, MDC }
 import zio.*
+import zio.http.*
 import zio.http.Header.AccessControlAllowMethods
 import zio.http.internal.middlewares.Cors
-import zio.http.{ HttpApp, HttpAppMiddleware, Method, Server }
 import zio.json.{ DecoderOps, EncoderOps }
 import zio.logging.*
 import zio.logging.LogFormat.*
@@ -15,17 +14,18 @@ import java.util.concurrent.TimeUnit
 
 object Main extends ZIOAppDefault with Layers:
 
+  override val bootstrap: ZLayer[ZIOAppArgs, Any, Any] =
+    Runtime.removeDefaultLoggers >>> SLF4J.slf4j
+
   private def app = for {
     _      <- ZIO.logInfo("App starting up")
     routes <- ZIO.service[Routes]
-    fiber  <- server(routes).forkDaemon
-    _      <- ZIO.never
-  } yield fiber
+    _      <- server(routes).as(ZIO.never)
+  } yield ()
 
   override val run: UIO[ExitCode] =
     app
       .provide(env)
-      .flatMap(_.join)
       .exitCode
 
   val corsConfig =

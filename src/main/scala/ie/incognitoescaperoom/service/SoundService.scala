@@ -1,11 +1,10 @@
 package ie.incognitoescaperoom.service
 
-import ie.incognitoescaperoom.settings.{Settings, SoundSettings}
-import ie.incognitoescaperoom.settings.{Settings, SoundSettings}
+import ie.incognitoescaperoom.settings.{ Settings, SoundSettings }
 import zio.*
 
 import java.math.MathContext
-import java.time.{Instant, LocalDateTime, ZoneId}
+import java.time.{ Instant, LocalDateTime, ZoneId }
 import java.util.UUID
 import javax.sound.sampled.*
 
