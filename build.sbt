@@ -13,7 +13,7 @@ lazy val root = (project in file("."))
     name := "incognito-sound",
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio"      % zioVersion,
-      "dev.zio" %% "zio-http" % "0.0.5",
+      "dev.zio" %% "zio-http" % "3.0.0-RC1",
       "dev.zio" %% "zio-json" % "0.5.0",
 //      "dev.zio"               %% "zio-logging"                       % "2.1.0",
       "dev.zio"               %% "zio-logging-slf4j"        % "2.1.11",

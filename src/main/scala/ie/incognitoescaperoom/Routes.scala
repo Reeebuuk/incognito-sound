@@ -4,7 +4,6 @@ import ie.incognitoescaperoom.service.SoundServiceApi
 import ie.incognitoescaperoom.settings.Settings
 import zio.*
 import zio.http.*
-import zio.http.model.{ Method, Status }
 import zio.json.*
 
 case class Routes(soundService: SoundServiceApi, settings: Settings):

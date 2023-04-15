@@ -2,9 +2,9 @@ package ie.incognitoescaperoom
 
 import org.slf4j.{ LoggerFactory, MDC }
 import zio.*
-import zio.http.middleware.Cors
-import zio.http.model.Method
-import zio.http.{ HttpApp, HttpAppMiddleware, Server, ServerConfig }
+import zio.http.Header.AccessControlAllowMethods
+import zio.http.internal.middlewares.Cors
+import zio.http.{ HttpApp, HttpAppMiddleware, Method, Server }
 import zio.json.{ DecoderOps, EncoderOps }
 import zio.logging.*
 import zio.logging.LogFormat.*
@@ -29,18 +29,12 @@ object Main extends ZIOAppDefault with Layers:
       .exitCode
 
   val corsConfig =
-    Cors.CorsConfig(allowedOrigins = _ == "*", allowedMethods = Some(Set(Method.PUT, Method.DELETE, Method.POST, Method.GET)))
+    Cors.CorsConfig(allowedMethods = AccessControlAllowMethods(Method.GET, Method.POST, Method.PUT))
 
   def httpRoutes(routes: Routes) = routes.routes @@
     HttpAppMiddleware.cors(corsConfig) @@
     HttpAppMiddleware.timeout(5.seconds) @@
     HttpAppMiddleware.debug
 
-  val config: ServerConfig =
-    ServerConfig.default
-      .port(9000)
-      .maxThreads(2)
-
-  def server(routes: Routes): ZIO[Any, Throwable, Nothing] = Server
-    .serve(httpRoutes(routes))
-    .provide(ServerConfig.live(config), Server.live)
+  def server(routes: Routes): ZIO[Any, Throwable, Nothing] =
+    Server.serve(httpRoutes(routes)).provide(Server.defaultWith(_.port(9000).enableRequestStreaming))
