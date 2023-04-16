@@ -18,7 +18,7 @@ object Main extends ZIOAppDefault with Layers:
     Runtime.removeDefaultLoggers >>> SLF4J.slf4j
 
   private def app = for {
-    _      <- ZIO.logInfo("App starting up")
+    _      <- ZIO.logInfo("App starting up on 9000")
     routes <- ZIO.service[Routes]
     _      <- server(routes).as(ZIO.never)
   } yield ()
@@ -37,4 +37,9 @@ object Main extends ZIOAppDefault with Layers:
     HttpAppMiddleware.debug
 
   def server(routes: Routes): ZIO[Any, Throwable, Nothing] =
-    Server.serve(httpRoutes(routes)).provide(Server.defaultWith(_.port(9000).enableRequestStreaming))
+    Server
+      .serve(httpRoutes(routes))
+      .provide(Server.defaultWith(_.port(9000).enableRequestStreaming))
+      .onError { x =>
+        ZIO.foreach(x.failures)(err => ZIO.logErrorCause(s"Uncaught error ${err.getLocalizedMessage}", Cause.fail(x)))
+      }
