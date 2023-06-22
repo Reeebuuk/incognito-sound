@@ -11,8 +11,8 @@ import javax.sound.sampled.*
 import scala.annotation.tailrec
 
 trait SoundServiceApi:
-  def getSound(filename:        String): Option[SoundStreamDataHandler]
-  def setPlayingFiber(filename: String, fiber: Fiber.Runtime[Throwable, Unit]): Unit
+  def numberOfSounds(): Int
+  def getSound(filename: String): Option[SoundStreamDataHandler]
 
 final case class SoundService(settings: Settings) extends SoundServiceApi:
 
@@ -20,20 +20,10 @@ final case class SoundService(settings: Settings) extends SoundServiceApi:
 
   private val allSounds: List[SoundStreamDataHandler] = settings.sounds.map(SoundStreamDataHandler(_, mixerInfo))
 
-  override def setPlayingFiber(filename: String, fiber: Fiber.Runtime[Throwable, Unit]): Unit =
-    allSounds.find(_.soundSettings.filename == filename).foreach(_.setPlayFiber(fiber))
+  override def numberOfSounds(): Int = settings.sounds.length
 
   override def getSound(filename: String): Option[SoundStreamDataHandler] =
     allSounds.find(_.soundSettings.filename == filename)
-
-case class SoundStreamData(
-  deviceName:        String,
-  filename:          String,
-  isBackgroundMusic: Boolean,
-  audioStream:       AudioInputStream,
-  line:              SourceDataLine,
-  format:            AudioFormat
-)
 
 object SoundStreamData:
   def apply(soundSettings: SoundSettings, mixerInfo: Array[Mixer.Info]): SoundStreamData =
@@ -46,34 +36,37 @@ object SoundStreamData:
     line.open(format)
     SoundStreamData(soundSettings.deviceName, soundSettings.filename, soundSettings.isBackgroundMusic, audioStream, line, format)
 
+case class SoundStreamData(
+  deviceName:        String,
+  filename:          String,
+  isBackgroundMusic: Boolean,
+  audioStream:       AudioInputStream,
+  line:              SourceDataLine,
+  format:            AudioFormat
+)
+
 case class SoundStreamDataHandler(soundSettings: SoundSettings, mixerInfo: Array[Mixer.Info]):
 
-  @volatile
-  var soundStreamData: SoundStreamData = SoundStreamData(soundSettings, mixerInfo)
+  val soundStreamData: SoundStreamData = SoundStreamData(soundSettings, mixerInfo)
+  soundStreamData.audioStream.mark(Integer.MAX_VALUE)
 
   private def volumeControl = soundStreamData.line.getControl(FloatControl.Type.MASTER_GAIN).asInstanceOf[FloatControl]
 
   @volatile
-  var isStopped: Boolean = false
-  @volatile
+  var isStopped:       Boolean = false
   var currentPosition: Long = 0
-  @volatile
-  var playingFiber: Option[Fiber.Runtime[Throwable, Unit]] = None
 
   def setVolume(value: Float): Unit =
     volumeControl.setValue(value)
 
-  def setPlayFiber(fiber: Fiber.Runtime[Throwable, Unit]): Unit =
-    playingFiber = Some(fiber)
-
   def stop(startFromBeginning: Boolean = false): Unit =
-    if (startFromBeginning) currentPosition = 0
-    soundStreamData.line.stop()
+    if (startFromBeginning)
+      currentPosition = 0
+
     isStopped = true
-    playingFiber.map(_.interruptFork)
-    playingFiber = None
+    println("Stopping")
+    soundStreamData.audioStream.reset()
     soundStreamData.line.drain()
-    soundStreamData = SoundStreamData(soundSettings, mixerInfo)
 
   def close(): Unit =
     soundStreamData.line.drain()
@@ -86,10 +79,12 @@ case class SoundStreamDataHandler(soundSettings: SoundSettings, mixerInfo: Array
     val bytesPerSecond     = soundStreamData.format.getFrameSize * soundStreamData.format.getFrameRate
     val targetBytePosition = seconds * bytesPerSecond
     currentPosition = targetBytePosition.toLong
+    isStopped       = false
     play()
   }
 
   def play(): Unit =
+    isStopped = false
     playInternal(soundStreamData.audioStream, soundStreamData.line)
 
   private def skip(seconds: Long): Unit = {
@@ -101,9 +96,8 @@ case class SoundStreamDataHandler(soundSettings: SoundSettings, mixerInfo: Array
 
   private def playInternal(audioStream: AudioInputStream, line: SourceDataLine): Unit =
     soundStreamData.line.start()
-    isStopped = false
-
     soundStreamData.audioStream.skip(currentPosition)
+
     val buffer = new Array[Byte](1024 * 4)
     var n = 0
     while (!isStopped && n != -1)
@@ -111,6 +105,13 @@ case class SoundStreamDataHandler(soundSettings: SoundSettings, mixerInfo: Array
       if (n > 0)
         line.write(buffer, 0, n)
       currentPosition += n
+
+    println(s"play + $isStopped")
+    if (isStopped) stop(true)
+    else if (n == -1 && soundSettings.isBackgroundMusic)
+      audioStream.reset()
+      currentPosition = 0
+      play()
 
 object SoundService:
   val live = ZLayer.fromFunction(SoundService.apply _)

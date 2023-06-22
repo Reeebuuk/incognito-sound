@@ -21,28 +21,26 @@ case class Routes(soundService: SoundServiceApi, settings: Settings):
   def routes: HttpApp[Any, Nothing] = Http
     .collectZIO[Request] {
       case Method.GET -> !! / "api" / "sound" / filename / "play" =>
+        val value = soundService.getSound(filename).get
         for {
-          _     <- ZIO.attempt(soundService.getSound(filename).get.stop(true)).orDie
-          fiber <- ZIO.attemptBlocking(soundService.getSound(filename).get.play()).forkDaemon
-          _     <- ZIO.attempt(soundService.setPlayingFiber(filename, fiber)).orDie
+          _ <- remapErrorAndLog(ZIO.attempt(value.stop(true)))
+          _ <- remapErrorAndLog(ZIO.attempt(value.play()))
         } yield Response.ok
       case Method.GET -> !! / "api" / "sound" / filename / "stop" =>
         for {
-          x <- remapErrorAndLog(ZIO.attempt(soundService.getSound(filename).get.stop(true)))
+          _ <- remapErrorAndLog(ZIO.attempt(soundService.getSound(filename).get.stop(true)))
         } yield Response.ok
       case Method.GET -> !! / "api" / "sound" / filename / "pause" =>
         soundService.getSound(filename).get.stop()
         ZIO.unit.as(Response.ok)
       case Method.GET -> !! / "api" / "sound" / filename / "resume" =>
         for {
-          _     <- ZIO.attempt(soundService.getSound(filename).get.stop()).orDie
-          fiber <- ZIO.attemptBlocking(soundService.getSound(filename).get.play()).forkDaemon
-          _     <- ZIO.attempt(soundService.setPlayingFiber(filename, fiber)).orDie
+          _ <- remapErrorAndLog(ZIO.attempt(soundService.getSound(filename).get.stop()))
+          _ <- remapErrorAndLog(ZIO.attempt(soundService.getSound(filename).get.play()))
         } yield Response.ok
       case Method.GET -> !! / "api" / "sound" / filename / "jump" / seconds =>
         for {
-          fiber <- ZIO.attemptBlocking(soundService.getSound(filename).get.jumpTo(seconds.toInt)).forkDaemon
-          _     <- ZIO.attempt(soundService.setPlayingFiber(filename, fiber)).orDie
+          _ <- remapErrorAndLog(ZIO.attempt(soundService.getSound(filename).get.jumpTo(seconds.toInt)))
         } yield Response.ok
 
     }
